@@ -13,6 +13,8 @@ setup(
     package_data={"*": ["*.html"]},
     install_requires=[
         "cowboycushion",
+        "numpy",
+        "pandas",
         "Quandl",
     ],
     tests_require=[
