@@ -15,8 +15,11 @@ setup(
         "cowboycushion",
         "numpy",
         "pandas",
-        "Quandl",
+        "redis",
+        "ychartspy",
     ],
     tests_require=[
+        "mock",
+        "nose",
     ]
 )
