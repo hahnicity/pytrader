@@ -13,6 +13,7 @@ setup(
     package_data={"*": ["*.html"]},
     install_requires=[
         "cowboycushion",
+        "finsymbols",
         "numpy",
         "pandas",
         "redis",
@@ -21,5 +22,10 @@ setup(
     tests_require=[
         "mock",
         "nose",
-    ]
+    ],
+    entry_points={
+        "console_scripts": [
+            "pytrader=pytrader.main:main",
+        ]
+    }
 )
