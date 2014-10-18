@@ -1,6 +1,13 @@
+"""
+Serves to gather data from the internet on our stock of choice
+"""
 from argparse import ArgumentParser
+from datetime import datetime
+
+from redis import StrictRedis
 
 from pytrader.gatherer import gather_data
+from pytrader.storage import push_to_redis
 from pytrader.ycharts import YChartsDataImplementation
 
 
@@ -20,4 +27,6 @@ def parse_args():
 
 def main():
     args = parse_args()
+    redis = StrictRedis(host=args.redis_host, port=args.redis_port, db=args.redis_db)
     data = gather_data(args, YChartsDataImplementation)
+    push_to_redis(redis, data, args.ticker, args.time_length)
