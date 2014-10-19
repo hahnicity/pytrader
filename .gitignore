@@ -3,6 +3,8 @@ pwfile.nc
 __pycache__/
 *.py[cod]
 *.sw[op]
+*.pickle
+*.ipynb
 
 # C extensions
 *.so

@@ -14,10 +14,11 @@ setup(
     install_requires=[
         "cowboycushion",
         "finsymbols",
-        "numpy",
-        "pandas",
+        "matplotlib",
         "redis",
+        "scikit-learn",
         "ychartspy",
+        "zipline",
     ],
     tests_require=[
         "mock",
