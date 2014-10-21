@@ -1,13 +1,12 @@
-from datetime import datetime
 from pickle import dumps, loads
 
 
-def _make_key_name(data, ticker, time_length):
-    return "{}_{}_{}".format(data.index.values[-1], time_length, ticker)
+def _make_key_name(data, ticker):
+    return "{}_{}_{}".format(data.index.values[0], data.index.values[-1], ticker)
 
 
-def push_to_redis(redis, data, ticker, time_length):
-    key_name = _make_key_name(data, ticker, time_length)
+def push_to_redis(redis, data, ticker):
+    key_name = _make_key_name(data, ticker)
     redis.set(key_name, dumps(data))
 
 
