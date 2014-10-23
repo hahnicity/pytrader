@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 
 from zipline.api import order_percent
