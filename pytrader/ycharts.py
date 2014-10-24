@@ -6,22 +6,16 @@ from ychartspy.client import YChartsClient
 
 
 class YChartsDataImplementation(object):
-    def __init__(self, **kwargs):
-        """
-        :username: YCharts username
-        :password: YCharts password
-        """
-        if "password" not in kwargs or "username" not in kwargs:
-            raise Exception("You must pass in a ycharts username and password")
+    def __init__(self):
         self.client = YChartsClient()
-        self.client.authenticate(kwargs["username"], kwargs["password"])
 
-    def get_prices(self, ticker, time_length):
-        raw_data = self.client.get_security_prices(ticker, time_length)
-        return convert_to_pandas(raw_data, "prices")
+    def authenticate(self, username, password):
+        self.client.authenticate(username, password)
 
-    def get_metric(self, ticker, metric, time_length):
-        raw_data = self.client.get_security_metric(ticker, metric, time_length)
+    def get_metric(self, ticker, metric, time_length, start_date, end_date):
+        raw_data = self.client.get_security_metric(
+            ticker, metric, time_length=time_length, start_date=start_date, end_date=end_date
+        )
         return convert_to_pandas(raw_data, metric)
 
 

@@ -2,15 +2,24 @@ from numpy import append, array
 from pandas import DataFrame
 
 
-def gather_data(data_client, ticker, time_length, start_date, end_date):
-    jobs = [
-        # Hacky but wait until we actually care about looking at months more fine grain detail
-        data_client.get_metric(ticker, "eps_ttm", time_length=10),
-        data_client.get_metric(ticker, "eps_est_0y", time_length=time_length),
+def _gather_data(data_client, ticker, time_length, start_date, end_date):
+    return [
+        data_client.get_metric(ticker, "eps_ttm", time_length, start_date, end_date),
+        data_client.get_metric(ticker, "eps_est_0y", time_length, start_date, end_date),
     ]
+
+
+def gather_data_with_multiprocess_client(data_client, ticker, time_length, start_date, end_date):
+    jobs = _gather_data(data_client, ticker, time_length, start_date, end_date)
     data_client.close()
     data_client.join()
     dfs = [job.get() for job in jobs]
+    # just keep it like this until we need otherwise
+    return merge_data_frames(*dfs)
+
+
+def gather_data_with_single_process_client(data_client, ticker, time_length, start_date, end_date):
+    dfs = _gather_data(data_client, ticker, time_length, start_date, end_date)
     # just keep it like this until we need otherwise
     return merge_data_frames(*dfs)
 

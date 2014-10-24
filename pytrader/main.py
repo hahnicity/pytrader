@@ -6,13 +6,18 @@ from argparse import ArgumentParser
 from cowboycushion.multiprocessing_limiter import RedisMultiprocessingLimiter
 from redis import StrictRedis
 
-from pytrader.gatherer import gather_data
+from pytrader.gatherer import gather_data_with_multiprocess_client
 from pytrader.storage import push_to_redis
 from pytrader.ycharts import YChartsDataImplementation
 
 
-def get_data_impl(user, password):
-    data_impl = YChartsDataImplementation(username=user, password=password)
+def get_data_impl():
+    return YChartsDataImplementation()
+
+
+def get_authenticated_data_impl(user, password):
+    data_impl = get_data_impl()
+    data_impl.authenticate(user, password)
     return data_impl
 
 
@@ -35,7 +40,7 @@ def parse_args():
 def main():
     args = parse_args()
     redis = StrictRedis(host=args.redis_host, port=args.redis_port, db=args.redis_db)
-    data_impl = get_data_impl(args.ycharts_user, args.ycharts_pw)
+    data_impl = get_authenticated_data_impl(args.ycharts_user, args.ycharts_pw)
     data_client = RedisMultiprocessingLimiter(
         data_impl,
         args.batch_poll_timeout,
@@ -47,6 +52,7 @@ def main():
         args.pool_size
     )
     # Just keep start/end date at None/None for now
-    data = gather_data(data_client, args.ticker, args.time_length, None, None)
-    import pdb; pdb.set_trace()
+    data = gather_data_with_multiprocess_client(
+        data_client, args.ticker, args.time_length, None, None
+    )
     push_to_redis(redis, data, args.ticker)

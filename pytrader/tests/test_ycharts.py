@@ -17,7 +17,7 @@ def test_get_prices():
     d = YChartsDataImplementation()
     mock_ycharts = Mock()
     d.client = mock_ycharts
-    mock_ycharts.get_security_prices.return_value = RESPONSE
-    results = d.get_prices("FOO", 1)
+    mock_ycharts.get_security_metric.return_value = RESPONSE
+    results = d.get_metric("FOO", "prices", None, None, None)
     eq_(results.to_csv(),
         DataFrame([10.0, 11.0], index=["2014-10-10", "2014-10-11"], columns=["prices"]).to_csv())
