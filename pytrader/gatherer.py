@@ -3,25 +3,31 @@ from pandas import DataFrame
 
 
 def _gather_data(data_client, ticker, time_length, start_date, end_date):
-    return [
-        data_client.get_metric(ticker, "eps_ttm", time_length, start_date, end_date),
-        data_client.get_metric(ticker, "eps_est_0y", time_length, start_date, end_date),
+    metrics = ("eps_ttm", "eps_est_0y", "free_cash_flow", "revenues_ttm", "sales_est_0y")
+    data = [data_client.get_prices(ticker, time_length, start_date, end_date)]
+    return data + [
+        data_client.get_metric(ticker, metric, time_length, start_date, end_date)
+        for metric in metrics
     ]
+
+
+def _merge_dfs(single_dfs):
+    dfs = merge_data_frames(single_dfs[0], single_dfs[1])
+    for df in single_dfs[2:]:
+        dfs = merge_data_frames(dfs, df)
+    return dfs
 
 
 def gather_data_with_multiprocess_client(data_client, ticker, time_length, start_date, end_date):
     jobs = _gather_data(data_client, ticker, time_length, start_date, end_date)
     data_client.close()
     data_client.join()
-    dfs = [job.get() for job in jobs]
-    # just keep it like this until we need otherwise
-    return merge_data_frames(*dfs)
+    return _merge_dfs([job.get() for job in jobs])
 
 
 def gather_data_with_single_process_client(data_client, ticker, time_length, start_date, end_date):
     dfs = _gather_data(data_client, ticker, time_length, start_date, end_date)
-    # just keep it like this until we need otherwise
-    return merge_data_frames(*dfs)
+    return _merge_dfs(dfs)
 
 
 def merge_unequal_data_frames(dfa, dfb):

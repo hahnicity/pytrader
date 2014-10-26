@@ -1,6 +1,9 @@
+from collections import namedtuple
 from getpass import getpass
 
 import matplotlib.pyplot as plt
+from numpy import append, array, diff
+from pandas import DataFrame
 from redis import StrictRedis
 from sklearn.ensemble import RandomForestClassifier
 from zipline.api import order_percent, order_target
@@ -15,8 +18,16 @@ def _calc_return(new, old):
     return (new - old) / old
 
 
+def get_x_point(context, data, ticker, move_return):
+    date = data[ticker]["dt"].strftime("%Y-%m-%d")
+    pytrader_data = context.pytrader_data[ticker].loc[date].values
+    return append(pytrader_data, move_return)
+
+
 def initialize(context):
+    context.pytrader_data = {}
     context.model = RandomForestClassifier()
+    context.StockTuple = namedtuple("StockTuple", ["ticker", "days_after", "close", "move_return"])
     context.x = []
     context.y = []
     context.yesterday_price = {}
@@ -28,6 +39,12 @@ def initialize(context):
     context.predictions = []
 
 
+def calculate_diffs(df):
+    diff_cols = ["diff_{}".format(key) for key in df.keys()]
+    diff_vals = [append(0, diff(df[key].values) / df[key].values[:-1]) for key in df.keys()]
+    return DataFrame(array(diff_vals).transpose(), index=df.index.values, columns=diff_cols)
+
+
 def post_initialize(context, data):
     """
     Since `initialize` doesn't actually enable us to see the parameters of when
@@ -36,36 +53,36 @@ def post_initialize(context, data):
     """
     if context.sim_params.period_start == data[data.keys()[0]]["dt"]:
         redis = StrictRedis(host="localhost", port=6379, db=0)
-        data_impl = get_authenticated_data_impl("grehm87@gmail.com", getpass() )
+        data_impl = get_authenticated_data_impl("grehm87@gmail.com", getpass())
         # Since we are currently using YCharts our data schema is a little weird
-        redis_start_date = context.sim_params.period_start.strftime("%Y-%m-%d")
-        redis_end_date = context.sim_params.period_end.strftime("%Y-%m-%d")
-        ycharts_start_date = context.sim_params.period_start.strftime("%m/%d/%Y")
-        ycharts_end_date = context.sim_params.period_end.strftime("%m/%d/%Y")
+        start_date = context.sim_params.period_start.strftime("%Y-%m-%d")
+        end_date = context.sim_params.period_end.strftime("%Y-%m-%d")
         for ticker in data.keys():
             try:
-                additional_data = pull_from_redis(redis, ticker, redis_start_date, redis_end_date)
+                pytrader_data = pull_from_redis(redis, ticker, start_date, end_date)
             except RecordsNotFoundError:
-                additional_data = gather_data_with_single_process_client(
-                    data_impl, ticker, None, ycharts_start_date, ycharts_end_date
-                )
-                import pdb;pdb.set_trace()
-                push_to_redis(redis, additional_data, ticker)
+                pytrader_data = gather_data_with_single_process_client(data_impl, ticker, None, start_date, end_date)
+                push_to_redis(redis, pytrader_data, ticker)
+            del pytrader_data["price"]  # Delete the price col, we don't need it
+            pytrader_data = calculate_diffs(pytrader_data)
+            context.pytrader_data[ticker] = pytrader_data
 
 
 def handle_countdowns(context, data):
     countdown_idx_to_remove = []
-    for idx, day_tuple in enumerate(context.data_countdowns):
-        countdown = day_tuple[1] - 1
+    for idx, stock_tuple in enumerate(context.data_countdowns):
+        ticker = stock_tuple.ticker
+        countdown = stock_tuple.days_after - 1
         if countdown == 0:
-            # This must e a list or else RandomForest will throw an error
-            context.x.append([day_tuple[3]])
-            context.y.append(_calc_return(data[day_tuple[0]]["close"], day_tuple[2]) > 0)
+            context.x.append(get_x_point(context, data, stock_tuple.ticker, stock_tuple.move_return))
+            context.y.append(_calc_return(data[stock_tuple.ticker]["close"], stock_tuple.close) > 0)
             countdown_idx_to_remove.append(idx)
         else:
-            context.data_countdowns[idx] = (day_tuple[0], countdown) + day_tuple[2:]
+            context.data_countdowns[idx] = context.StockTuple(
+                stock_tuple.ticker, countdown, *stock_tuple[2:]
+            )
     context.data_countdowns = [
-        day_tuple for idx, day_tuple in enumerate(context.data_countdowns)
+        stock_tuple for idx, stock_tuple in enumerate(context.data_countdowns)
         if idx not in countdown_idx_to_remove
     ]
 
@@ -75,14 +92,12 @@ def handle_price_histories(context, data):
         if ticker not in context.yesterday_price:
             context.yesterday_price[ticker] = stock_data["close"]
         elif abs(_calc_return(stock_data["close"], context.yesterday_price[ticker])) > context.threshold:
-            # This should really be a namedtuple
-            context.data_countdowns.append(
-                (ticker,
-                 context.number_days_after,
-                 stock_data["close"],
-                 _calc_return(stock_data["close"], context.yesterday_price[ticker]),
-                )
-            )
+            context.data_countdowns.append(context.StockTuple(
+                ticker,
+                context.number_days_after,
+                stock_data["close"],
+                _calc_return(stock_data["close"], context.yesterday_price[ticker])
+            ))
             context.yesterday_price[ticker] = stock_data["close"]
         else:
             context.yesterday_price[ticker] = stock_data["close"]
@@ -92,8 +107,7 @@ def handle_terminations(context):
     idx_to_remove = []
     for idx, position in enumerate(context.to_terminate):
         ticker = position[0]
-        # This isn't correct but oh well for now
-        #import pdb; pdb.set_trace()
+        # This isn't generic but oh well for now
         order_target(ticker, 0)
         idx_to_remove.append(idx)
     context.to_terminate = [
@@ -111,11 +125,13 @@ def handle_data(context, data):
     if len(context.x) > context.data_points_necessary and new_data_counts > old_data_counts:
         context.model.fit(context.x, context.y)
         new_counts = context.data_countdowns[old_data_counts:]
-        for idx, data_tuple in enumerate(new_counts):
-            prediction = context.model.predict([data_tuple[3]])
-            order_percent(data_tuple[0], {1: 1, 0: -1}[int(prediction)] * (1.0 / len(data)))
+        for idx, stock_tuple in enumerate(new_counts):
+            prediction = context.model.predict(
+                get_x_point(context, data, stock_tuple.ticker, stock_tuple.move_return)
+            )
+            order_percent(stock_tuple.ticker, {1: 1, 0: -1}[int(prediction)] * (1.0 / len(data)))
             # This isn't correct but oh well for now
-            context.to_terminate.append((data_tuple[0], {1: 1, 0: -1}[int(prediction)]))
+            context.to_terminate.append((stock_tuple.ticker, {1: 1, 0: -1}[int(prediction)]))
 
 
 def analyze(context, perf):
