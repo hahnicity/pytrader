@@ -32,7 +32,7 @@ def initialize(context):
     context.y = []
     context.yesterday_price = {}
     context.number_days_after = 1
-    context.data_points_necessary = 0
+    context.data_points_necessary = 50
     context.data_countdowns = []
     context.to_terminate = []
     context.threshold = .05
@@ -107,9 +107,12 @@ def handle_terminations(context):
     idx_to_remove = []
     for idx, position in enumerate(context.to_terminate):
         ticker = position[0]
-        # This isn't generic but oh well for now
-        order_target(ticker, 0)
-        idx_to_remove.append(idx)
+        countdown = position[1] - 1
+        if countdown == 0:
+            order_target(ticker, 0)
+            idx_to_remove.append(idx)
+        else:
+            context.to_terminate[idx] = (ticker, countdown)
     context.to_terminate = [
         data for idx, data in enumerate(context.to_terminate) if idx not in idx_to_remove
     ]
@@ -130,8 +133,7 @@ def handle_data(context, data):
                 get_x_point(context, data, stock_tuple.ticker, stock_tuple.move_return)
             )
             order_percent(stock_tuple.ticker, {1: 1, 0: -1}[int(prediction)] * (1.0 / len(data)))
-            # This isn't correct but oh well for now
-            context.to_terminate.append((stock_tuple.ticker, {1: 1, 0: -1}[int(prediction)]))
+            context.to_terminate.append((stock_tuple.ticker, context.number_days_after))
 
 
 def analyze(context, perf):
