@@ -6,7 +6,7 @@ from numpy import append, array, diff
 from pandas import DataFrame
 from redis import StrictRedis
 from sklearn.ensemble import RandomForestClassifier
-from zipline.api import order_percent, order_target
+from zipline.api import order_percent, order_target, record
 
 from pytrader.exceptions import RecordsNotFoundError
 from pytrader.gatherer import gather_data_with_single_process_client
@@ -27,7 +27,9 @@ def get_x_point(context, data, ticker, move_return):
 def initialize(context):
     context.pytrader_data = {}
     context.model = RandomForestClassifier()
-    context.StockTuple = namedtuple("StockTuple", ["ticker", "days_after", "close", "move_return"])
+    context.StockTuple = namedtuple(
+        "StockTuple", ["ticker", "days_after", "close", "move_return", "prediction"]
+    )
     context.x = []
     context.y = []
     context.yesterday_price = {}
@@ -75,8 +77,13 @@ def handle_countdowns(context, data):
         countdown = stock_tuple.days_after - 1
         if countdown == 0:
             context.x.append(get_x_point(context, data, stock_tuple.ticker, stock_tuple.move_return))
-            context.y.append(_calc_return(data[stock_tuple.ticker]["close"], stock_tuple.close) > 0)
+            context.y.append(_calc_return(data[ticker]["close"], stock_tuple.close) > 0)
             countdown_idx_to_remove.append(idx)
+            if stock_tuple.prediction is not None:
+                context.predictions.append(
+                    (_calc_return(data[ticker]["close"], stock_tuple.close) > 0) ==
+                    stock_tuple.prediction
+                )
         else:
             context.data_countdowns[idx] = context.StockTuple(
                 stock_tuple.ticker, countdown, *stock_tuple[2:]
@@ -96,7 +103,8 @@ def handle_price_histories(context, data):
                 ticker,
                 context.number_days_after,
                 stock_data["close"],
-                _calc_return(stock_data["close"], context.yesterday_price[ticker])
+                _calc_return(stock_data["close"], context.yesterday_price[ticker]),
+                None
             ))
             context.yesterday_price[ticker] = stock_data["close"]
         else:
@@ -132,8 +140,14 @@ def handle_data(context, data):
             prediction = context.model.predict(
                 get_x_point(context, data, stock_tuple.ticker, stock_tuple.move_return)
             )
+            record(prediction={1: 1, 0: -1}[int(prediction)])
             order_percent(stock_tuple.ticker, {1: 1, 0: -1}[int(prediction)] * (1.0 / len(data)))
             context.to_terminate.append((stock_tuple.ticker, context.number_days_after))
+            tmp_tuple = context.data_countdowns[old_data_counts + idx]
+            tmp_tuple = context.StockTuple(
+                tmp_tuple[0], tmp_tuple[1], tmp_tuple[2], tmp_tuple[3], bool(prediction)
+            )
+            context.data_countdowns[old_data_counts + idx] = tmp_tuple
 
 
 def analyze(context, perf):
