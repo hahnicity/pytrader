@@ -16,3 +16,11 @@ anything about how stocks would react to a swing the next day beyond telling me 
 stochastic, which I kinda already knew.
 
 .. _large_move_diff: http://nbviewer.ipython.org/github/hahnicity/pytrader/blob/master/pytrader/notebooks/large_move_diff.ipynb
+
+Reproducing bitcoin results on IBM
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+For a more academic experiment I have decided to mess around with reproducing the results from this MIT paper_.
+Data for the experiment was obtained from http://www.kibot.com/. I decided to use the stock prices from IBM's
+history. 
+
+.. _paper: http://arxiv-web3.library.cornell.edu/pdf/1410.1231v1.pdf
