@@ -15,6 +15,7 @@ setup(
         "cowboycushion",
         "finsymbols",
         "matplotlib",
+        "prettytable",
         "redis",
         "scikit-learn",
         "ychartspy",
