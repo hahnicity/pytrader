@@ -20,6 +20,7 @@ setup(
         "scikit-learn",
         "ychartspy",
         "zipline",
+        "scipy",
     ],
     tests_require=[
         "mock",
